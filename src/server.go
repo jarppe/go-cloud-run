@@ -105,7 +105,7 @@ func (s *Server) index() echo.HandlerFunc {
 	if err := s.renderer.ExecuteTemplate(&buf, "index.html", nil); err != nil {
 		log.Fatalf("Can't generate index.html: %v", err)
 	}
-	return s.assets.Handler(buf, "text/html; charset=utf-8")
+	return s.assets.Handler(buf.Bytes(), "text/html; charset=utf-8")
 }
 
 func (s *Server) notFound() func(c echo.Context) error {

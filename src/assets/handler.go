@@ -12,20 +12,20 @@ import (
 	"strconv"
 )
 
-func (assets *Assets) Handler(content bytes.Buffer, contentType string) echo.HandlerFunc {
+func (assets *Assets) Handler(content []byte, contentType string) echo.HandlerFunc {
 	var gzipped bytes.Buffer
-	gzipper := gzip.NewWriter(&gzipped)
-	etagger := sha1.New()
-	if _, err := io.Copy(io.MultiWriter(gzipper, etagger), bytes.NewReader(content.Bytes())); err != nil {
+	gzipWriter := gzip.NewWriter(&gzipped)
+	etagWriter := sha1.New()
+	if _, err := io.Copy(io.MultiWriter(gzipWriter, etagWriter), bytes.NewReader(content)); err != nil {
 		log.Fatalf("Can't gzip content: %v", err)
 	}
-	if err := gzipper.Close(); err != nil {
+	if err := gzipWriter.Close(); err != nil {
 		log.Fatalf("Can't close gzip writer: %v", err)
 	}
 
 	data := gzipped.Bytes()
 	contentLength := strconv.Itoa(len(data))
-	etag := hex.EncodeToString(etagger.Sum(nil)[:12])
+	etag := hex.EncodeToString(etagWriter.Sum(nil)[:12])
 
 	return func(c echo.Context) error {
 		req := c.Request()
@@ -45,9 +45,9 @@ func (assets *Assets) Handler(content bytes.Buffer, contentType string) echo.Han
 		header := resp.Header()
 		header.Set(echo.HeaderContentType, contentType)
 		header.Set(echo.HeaderContentLength, contentLength)
-		header.Set(echo.HeaderContentEncoding, "gzip")
-		header.Set("Cache-Control", cacheControl)
-		header.Set("ETag", etag)
+		header.Set(echo.HeaderContentEncoding, GZip)
+		header.Set(CacheControl, cacheControl)
+		header.Set(ETag, etag)
 		resp.WriteHeader(http.StatusOK)
 		_, err := io.Copy(resp.Writer, bytes.NewReader(data))
 		return err
