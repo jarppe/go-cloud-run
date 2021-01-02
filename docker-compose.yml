@@ -1,0 +1,23 @@
+---
+version: "3.8"
+
+
+services:
+
+  server:
+    image: go-cloud-run:dev
+    build:
+      context: .
+      dockerfile: Dockerfile-dev
+    networks:
+      - dev
+    ports:
+      - 8080:8080
+    volumes:
+      - ./src:/app/src:cached
+      - ./assets:/app/assets:cached
+    restart: on-failure
+
+networks:
+  dev:
+    name: go-cloud-run

@@ -4,26 +4,38 @@
 
 FROM golang:1.15-buster AS build
 
+ENV TINI_VERSION v0.19.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
+
 WORKDIR /app
 
-COPY ./src/go.mod .
-# COPY ./src/go.sum .
+COPY ./src/go.mod  .
+COPY ./src/go.sum  .
 
 RUN go mod download
 
-COPY ./src/*.go ./
+COPY ./src  ./
 
-RUN go install
+RUN CGO_ENABLED=0    \
+    GOOS=linux       \
+    GOARCH=amd64     \
+    go build -a -o /server
 
 #
 # Dist:
 #
 
-FROM debian:10-slim AS dist
+FROM gcr.io/distroless/static-debian10 AS dist
 
-WORKDIR /app
+COPY --from=build /tini     /tini
+COPY --from=build /server   /server
+COPY              ./assets  /assets
 
-COPY --from=build /go/bin/go-cloud-run /app/go-cloud-run
-COPY ./src/assets ./assets
+ENV HOST=0.0.0.0
+ENV PORT=8080
+ENV MODE=production
+ENV ASSETS=/assets
 
-CMD ["./go-cloud-run"]
+ENTRYPOINT ["/tini", "--"]
+CMD ["/server"]
