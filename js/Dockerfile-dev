@@ -1,0 +1,15 @@
+FROM node:15-buster-slim
+
+WORKDIR /app
+
+COPY package.json                      \
+     yarn.lock                         \
+     ./
+
+RUN yarn install --production=false    \
+                 --frozen-lockfile     \
+                 --no-progress
+
+COPY .  .
+
+CMD ["yarn", "watch"]

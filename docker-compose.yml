@@ -4,20 +4,37 @@ version: "3.8"
 
 services:
 
+  assets:
+    image: go-cloud-run:assets
+    build:
+      context: ./js
+      dockerfile: Dockerfile-dev
+    networks:
+      - dev
+    volumes:
+      - ./js/src:/app/src:cached
+      - ./js/assets:/app/assets:cached
+      - assets:/app/dist
+    restart: on-failure
+
   server:
     image: go-cloud-run:dev
     build:
-      context: .
+      context: ./go
       dockerfile: Dockerfile-dev
     networks:
       - dev
     ports:
       - 8080:8080
     volumes:
-      - ./src:/app/src:cached
-      - ./assets:/app/assets:cached
+      - ./go:/app:cached
+      - assets:/assets:cached
     restart: on-failure
 
 networks:
   dev:
     name: go-cloud-run
+
+volumes:
+  assets:
+    name: go-cloud-run-assets

@@ -2,13 +2,13 @@ help:
   @just --list
 
 
-# Build Docker image
-build-image:
+# Build image
+build-server:
   docker build -t go-cloud-run:latest .
 
 
-# Build Docker image
-run-image:
+# Run image
+run-server:
   docker run --rm -p 8080:8080 go-cloud-run:latest
 
 
@@ -27,7 +27,7 @@ dev +args="":
     go-cloud-run:dev {{ args }}
 
 
-sh:
+sh +args="":
   docker run                                         \
     --rm                                             \
     -it                                              \
@@ -40,3 +40,15 @@ sh:
     -v $(pwd)/src:/app/src:cached                    \
     -v $(pwd)/assets:/app/assets:cached              \
     go-cloud-run:dev {{ args }}
+
+
+front +args="bash":
+  docker volume create go-cloud-run-node-modules 2> /dev/null
+  docker run                                         \
+    --rm                                             \
+    --init                                           \
+    -it                                              \
+    -w /app                                          \
+    -v $(pwd)/js:/app:cached                         \
+    -v go-cloud-run-node-modules:/app/node_modules   \
+    node:15-buster-slim {{ args }}
