@@ -10,6 +10,4 @@ RUN yarn install --production=false    \
                  --frozen-lockfile     \
                  --no-progress
 
-COPY .  .
-
 CMD ["yarn", "watch"]

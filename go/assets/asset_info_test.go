@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-var testResources = "../../test-resources"
+var testResources = "../test-resources"
 
 var testFiles = []struct {
 	name string

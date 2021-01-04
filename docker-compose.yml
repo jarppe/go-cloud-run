@@ -9,13 +9,11 @@ services:
     build:
       context: ./js
       dockerfile: Dockerfile-dev
-    networks:
-      - dev
     volumes:
-      - ./js/src:/app/src:cached
-      - ./js/assets:/app/assets:cached
+      - ./js:/app:cached
       - assets:/app/dist
     restart: on-failure
+    command: ["yarn", "prod"]
 
   server:
     image: go-cloud-run:dev

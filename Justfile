@@ -42,13 +42,19 @@ sh +args="":
     go-cloud-run:dev {{ args }}
 
 
-front +args="bash":
-  docker volume create go-cloud-run-node-modules 2> /dev/null
-  docker run                                         \
+build-assets-image:
+  docker volume create go-cloud-run-assets 2> /dev/null
+  docker build -t go-cloud-run:assets                \
+                  -f ./js/Dockerfile-dev             \
+                  ./js
+
+
+assets +args="":
+  @docker run                                        \
     --rm                                             \
     --init                                           \
     -it                                              \
     -w /app                                          \
     -v $(pwd)/js:/app:cached                         \
-    -v go-cloud-run-node-modules:/app/node_modules   \
-    node:15-buster-slim {{ args }}
+    -v go-cloud-run-assets:/app/dist                 \
+    go-cloud-run:assets {{ args }}

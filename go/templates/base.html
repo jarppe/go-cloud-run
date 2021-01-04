@@ -1,0 +1,21 @@
+{{ define "head" }}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>go-cloud-run</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link href="https://cdn.jsdelivr.net/npm/bulma@0.9.1/css/bulma.min.css" rel="stylesheet">
+    <link href='{{ "/assets/main.css" | asset }}' rel="stylesheet">
+    <link href='{{ "/assets/favicon.ico" | asset }}' rel="icon"/>
+    <script src='{{ "/assets/vendors.js" | asset }}' defer></script>
+    <script src='{{ "/assets/main.js" | asset }}' defer></script>
+  </head>
+  <body>
+    <div class="container">
+      {{ end }}
+      {{ define "foot" }}
+    </div>
+  </body>
+</html>
+{{ end }}

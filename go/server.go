@@ -118,7 +118,18 @@ func (s *Server) routing(e *echo.Echo) {
 	e.GET("/ping", s.ping())
 	e.GET("/hello/:name", s.hello(), middleware.Gzip())
 	e.GET("/", s.index())
-	e.GET("/*", s.notFound())
+	e.GET("/turbo/", s.turbo())
+	e.GET("/turbo/:page", s.turbo())
+	// e.GET("/*", s.notFound())
+}
+
+func (s *Server) turbo() echo.HandlerFunc {
+	return func(c echo.Context) error {
+		page := "/turbo/" + c.Param("page")
+		return c.Render(http.StatusOK, "turbo.html", map[string]interface{}{
+			"PageName": page,
+		})
+	}
 }
 
 type templates struct {

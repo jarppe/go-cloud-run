@@ -1,14 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title>go-cloud-run</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href='{{ "/assets/main.css" | asset }}' rel="stylesheet">
-    <link href='{{ "/assets/favicon.ico" | asset }}' rel="icon"/>
-    <script src='{{ "/assets/main.js" | asset }}' async defer></script>
-  </head>
-  <body>
-    <h1>Hello</h1>
-  </body>
-</html>
+{{ template "head" . }}
+  <h1>Hello</h1>
+{{ template "foot" }}
