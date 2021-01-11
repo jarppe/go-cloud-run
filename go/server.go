@@ -1,60 +1,103 @@
 package main
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/jarppe/go-cloud-run/assets"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"html/template"
 	"io"
 	"log"
-	"net/http"
 	"os"
 	"time"
 )
 
 type Server struct {
+	*echo.Echo
+	*template.Template
 	// db, queue, secrets, etc...
-	echo     *echo.Echo
-	assets   *assets.Assets
-	renderer templates
+	assets *assets.Assets
+	DB     *pgxpool.Pool
+}
+
+func requireEnv(envName string) string {
+	value, found := os.LookupEnv(envName)
+	if !found {
+		log.Fatalf("missing environment value: %q", envName)
+	}
+	return value
 }
 
 func NewServer() *Server {
-	e := echo.New()
-	e.HideBanner = true
-
-	assetsPath, found := os.LookupEnv("ASSETS")
-	if !found {
-		panic(`missing environment value: "ASSETS"`)
+	assetsPath := requireEnv("ASSETS_PATH")
+	if stat, err := os.Stat(assetsPath); err != nil {
+		log.Fatalf("can't stat %q: %v", assetsPath, err)
+	} else if !stat.IsDir() {
+		log.Fatalf("assets path %q is not a directory", assetsPath)
 	}
+	mode := requireEnv("SERVER_MODE")
+	if mode != "production" && mode != "development" {
+		log.Fatalf("illegal value for mode: %q", mode)
+	}
+
 	assetsContext := assets.NewAssetsContext("assets", assetsPath)
-	renderer := initTemplates(assetsContext)
 
-	mode, modeSet := os.LookupEnv("MODE")
-	if !modeSet {
-		mode = "production"
+	dsn := fmt.Sprintf("user=%s password=%s host=%s port=%s dbname=%s pool_min_conns=2 pool_max_conns=10",
+		os.Getenv("POSTGRES_USER"),
+		os.Getenv("POSTGRES_PASSWORD"),
+		os.Getenv("POSTGRES_HOST"),
+		os.Getenv("POSTGRES_PORT"),
+		os.Getenv("POSTGRES_DB"))
+	db, err := pgxpool.Connect(context.Background(), dsn)
+	if err != nil {
+		log.Fatalf("unable to connect to database: %v", err)
 	}
-	e.Debug = mode != "production"
-	e.Renderer = renderer
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-	e.Use(middleware.Secure())
-	e.Use(assetsContext.Middleware())
 
-	server := &Server{
-		echo:     e,
+	var greeting string
+	var now time.Time
+	var data struct {
+		Foo struct {
+			Bar int64 `json:"bar"`
+		} `json:"foo"`
+	}
+	err = db.QueryRow(context.Background(), `select 'heelo', now(), '{"foo": {"bar": 42}}'::jsonb`).Scan(&greeting, &now, &data)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			log.Fatalf("Query failed: %q", pgErr.Message) // => syntax error at end of input
+		}
+		log.Fatalf("Query error: %v\n", err)
+	}
+
+	log.Printf("DB response:\n\t%s\n\t%s\n\t%+v",
+		greeting,
+		now.Format(time.RFC3339),
+		data)
+
+	s := &Server{
+		Echo:     echo.New(),
 		assets:   assetsContext,
-		renderer: renderer,
+		Template: initTemplates(assetsContext),
+		DB:       db,
 	}
 
-	server.routing(e)
-	return server
+	s.HideBanner = true
+	s.Debug = mode != "production"
+	s.Renderer = s
+
+	s.Use(middleware.Logger())
+	s.Use(middleware.Recover())
+	s.Use(middleware.Secure())
+	s.Use(assetsContext.Middleware())
+
+	return s
 }
 
-func (s *Server) Start() {
+func (s *Server) Up() {
 	go func() {
 		host, hostSet := os.LookupEnv("HOST")
 		if !hostSet {
@@ -66,86 +109,33 @@ func (s *Server) Start() {
 		}
 
 		log.Printf("Server listenig at %s:%s", host, port)
-		if err := s.echo.Start(host + ":" + port); err != nil {
+		if err := s.Start(host + ":" + port); err != nil {
 			log.Printf("HTTP Server termination cause: %v (%[1]T)", err)
 		}
 	}()
 }
 
-func (s *Server) Shutdown() {
+func (s *Server) Down() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := s.echo.Shutdown(ctx); err != nil {
+	if err := s.Shutdown(ctx); err != nil {
 		log.Printf("HTTP Server shutdown cause: %v (%[1]T)", err)
 	}
+	s.DB.Close()
 }
 
-func (s *Server) ping() func(c echo.Context) error {
-	return func(c echo.Context) error {
-		return c.String(http.StatusOK, "Hello, World!")
-	}
+func (s *Server) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+	return s.ExecuteTemplate(w, name, data)
 }
 
-func (s *Server) hello() func(c echo.Context) error {
-	return func(c echo.Context) error {
-		name := c.Param("name")
-		message := c.QueryParam("message")
-		if message == "" {
-			message = "Greetings"
-		}
-		return c.Render(http.StatusOK, "hello.html", map[string]string{
-			"Message": message,
-			"Name":    name,
-		})
-	}
-}
-
-func (s *Server) index() echo.HandlerFunc {
-	var buf bytes.Buffer
-	if err := s.renderer.ExecuteTemplate(&buf, "index.html", nil); err != nil {
-		log.Fatalf("Can't generate index.html: %v", err)
-	}
-	return s.assets.Handler(buf.Bytes(), "text/html; charset=utf-8")
-}
-
-func (s *Server) notFound() func(c echo.Context) error {
-	return func(c echo.Context) error {
-		return c.Render(http.StatusNotFound, "404.html", nil)
-	}
-}
-
-func (s *Server) routing(e *echo.Echo) {
-	e.GET("/ping", s.ping())
-	e.GET("/hello/:name", s.hello(), middleware.Gzip())
-	e.GET("/", s.index())
-	e.GET("/turbo/", s.turbo())
-	e.GET("/turbo/:page", s.turbo())
-	// e.GET("/*", s.notFound())
-}
-
-func (s *Server) turbo() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		page := "/turbo/" + c.Param("page")
-		return c.Render(http.StatusOK, "turbo.html", map[string]interface{}{
-			"PageName": page,
-		})
-	}
-}
-
-type templates struct {
-	*template.Template
-}
-
-func (t templates) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
-	return t.ExecuteTemplate(w, name, data)
-}
-
-func initTemplates(assets *assets.Assets) templates {
+func initTemplates(assets *assets.Assets) *template.Template {
 	t := template.New("")
 	t.Funcs(template.FuncMap{
 		"toString": toString,
 		"link":     link,
-		"asset":    assets.AssetRef,
+	})
+	t.Funcs(template.FuncMap{
+		"asset": assets.AssetRef,
 	})
 
 	// parse all html files in the templates directory
@@ -160,7 +150,7 @@ func initTemplates(assets *assets.Assets) templates {
 	//	log.Fatal(err)
 	//}
 
-	return templates{t}
+	return t
 }
 
 func toString(v interface{}) string {

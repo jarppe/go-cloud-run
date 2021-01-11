@@ -4,6 +4,18 @@ version: "3.8"
 
 services:
 
+  db:
+    image: postgres:13-alpine
+    init: true
+    restart: always
+    networks:
+      - dev
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    tmpfs: /var/lib/postgresql/data
+
   assets:
     image: go-cloud-run:assets
     build:
@@ -13,7 +25,6 @@ services:
       - ./js:/app:cached
       - assets:/app/dist
     restart: on-failure
-    command: ["yarn", "prod"]
 
   server:
     image: go-cloud-run:dev
@@ -27,6 +38,17 @@ services:
     volumes:
       - ./go:/app:cached
       - assets:/assets:cached
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - SERVER_MODE=development
+      - ASSETS_PATH=/assets
+      - DATABASE_URL=
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=postgres
     restart: on-failure
 
 networks:
